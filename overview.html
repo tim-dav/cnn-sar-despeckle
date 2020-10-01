@@ -1,0 +1,185 @@
+<html>
+  <head>
+    <title>Reference-Free Despeckling</title>
+    <meta content="">
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="content-wrapper">
+      <div class="header">
+        <a href="overview.html" class="selected">Overview</a>
+        <a href="gallery.html">Gallery</a>
+        <a href="contact.html">Contact</a>
+        <a href="https://github.com/tim-dav/cnn-sar-despeckle" target="_blank" rel="noopener noreferrer nofollow">Code</a>
+      </div>
+      
+    <h1>Overview</h1>
+
+    <strong>Table of contents</strong>
+    <ol class="toc">
+      <li>
+        <a href="#sar">Synthetic-aperture radar and speckling</a>
+      </li>
+      <li>
+        <a href="#state_of_the_art">State of the art</a>
+      </li>
+      <li>
+        <a href="#architecture">Architecture</a>
+      </li>
+      <li>
+        <a href="#methodology">Methodology</a>
+      </li>
+      <li>
+        <a href="#results">Results</a>
+      </li>
+    </ol>
+
+    <h2 id="sar">Synthetic-aperture radar and speckling</h2>
+
+    <p>
+    Synthetic Aperture Radar (SAR) is a widely applied form of active remote sensing that collects information with a high spatial resolution even in adverse weather and lighting conditions. Due to the randomness of natural media, images are strongly affected by speckle that arise from the coherent summation of the signals scattered from ground scatters distributed randomly within each resolution cell that hinders visual interpretation and physical parameter extraction of the images.
+    </p>
+
+    <h2 id="state_of_the_art">State of the art</h2>
+
+    <p>
+    Several methods have been developed for removing speckle from images. Early work such as the Lee filter considers a local minimum mean square criterion to estimate the underlying intensity in a sliding window. While Lee produces better readable images than the traditional denoising filters, it often requires the manual tuning of several parameters or multistage procedures to select the right parameter set. 
+    </p>
+
+    <p>
+    A more sophisticated despeckling algorithm named Block-Matching and 3-D filtering (BM3D) groups similar image blocks together and performs shrinkage in a transformed domain. Later, a modified version of BM3D known as SAR-BM3D was developed that modified BM3D to deal with the statistical properties of SAR images.
+    </p>
+
+    <p>
+    With the rise of deep learning, recent research demonstrates the effectiveness of CNNs in learning to denoise images based on noisy input only, without requiring clean ground-truth data. This approach, known as Noise2Noise, has been successful in denoising various types of artificial noise as well as speckling in MRI images, which is an encouraging sign that  the same method is applicable in despeckling SAR images.
+    </p>
+    
+    <h2 id="architecture">Architecture</h2>
+
+    <p>
+    Our architecture is a deep residual encoder-decoder convolutional network, consisting of multiple upsampling and downsampling blocks that allow the network to operate at different scales and resolutions. Skip connections are added between the symmetric upsampling and downsampling blocks to ensure that the detailed information is forwarded directly.  Input and output of the model are two-channel image patches storing the intensity in VH and VV polarization.
+    </p>
+
+    <div style="text-align: center;">
+      <img src="images/network.svg" style="max-height: 300px;"></img>
+      <span class="caption">Figure 1: Network architecture</span>
+    </div>
+
+    <h2 id="methodology">Methodology</h2>
+
+    <p>
+    We apply the method described above to a dataset of Sentinel-1 SAR volcanic images of nineteen volcanoes that were acquired in six-day intervals for three years in the context of the volcano monitoring system MOUNTS. We divide this data into two parts &mdash; images of seventeen volcanoes correspond to the training dataset, and the remaining data is reserved for evaluation. We do this to examine the generalization property of the model, i.e., how well a trained model performs on sequences of images outside the original training data. 
+    </p>
+
+    <p>
+    Because speckle is a deterministic process, it decorrelates with time due to changes in the surface. Additionally, speckle can be modelled as a multiplicative process, so we reason that a network operating on logarithmic data might outperform the one in linear space.  As part of our pipeline, we train the CNN models both in linear and logarithmic space, however, we should note that the CNN model trained in logarithmic space naturally requires the input patches transformed into logarithmic space.
+    </p>
+
+    <p>
+    Thus, given an image with speckle acquired at one point in time, when tasked to predict the same image from a different point in time, with a mostly different speckle pattern, our network predicts the underlying image structure but not the specific speckle values. We train the network using the least-square-error training loss, so each pixel generated in the prediction is directly compared with each pixel in the target image. Hence, the best our network can predict is the mean over all possible instances of the speckled image, i.e., a speckle free image.
+    </p>
+
+    <h2 id="results">Results</h2>
+
+    <p>
+    We carry out our evaluations on four unique images of volcanoes, each providing a unique view of one of two volcanoes. To provide a baseline comparison, we compare the model predictions (both linear and logarithmic space) against quasi-ground-truth images created by multitemporal averaging between 26 and 61 images of the same scene, depending on availability. For the CNNs presented here, we provide single-look complex SAR images into the pipeline that first processes them into intensity images, and then despeckles these images using our network. For evaluation purposes, intensity images prepared using the above process are supplied to the Lee and BM3D filters.
+    </p>
+
+    <p>
+    As shown in the <a href="gallery.html">figures</a>, the Lee and BM3D filters introduce some distortions in their output, with the Lee Filter causing moderate blurring and the BM3D filter inducing some streaking. The two predictions from the proposed CNNs appear very clean, possibly with some minor blurring. Further, we should note that the averaged reference image, while clear, has strong texturing in some areas that may be indicative of permanent scatterers in the scene.
+    </p>
+
+    <p>
+    For quantitative evaluation, two methods were chosen: equivalent number of looks (ENL) and the despeckling evaluation index (DEI). ENL is a measure of homogeneity and is applied on image regions that are expected to be homogeneous, such as water and those with little texture. Higher ENL values represent high homogeneity. As ENL is susceptible to the trivial solution, that the filter simply returns the same value for all resolution cells, DEI is included as a second measure. DEI is essentially a measure of edge preservation by taking the ratio of standard deviations between a large window and a smaller contained window. If edges are present in the large window but not the smaller one, this ratio will be small, which is preferred. As shown in <i>Table 1</i>, the proposed method outperformed all reference methods, with the CNN trained in logarithmic space generally outperforming the one trained in linear space.
+    </p>
+
+    <p class="centered">
+    <table class="left">
+      <tr>
+        <th>Method</th>
+        <th class="right">ENL VH</th>
+        <th class="right">ENL VV</th>
+        <th class="right">DEI VH</th>
+        <th class="right">DEI VV</th>
+      </tr>
+      <tr>
+        <td>Speckled</td>
+        <td class="right">3.19</td>
+        <td class="right">3.39</td>
+        <td class="right">0.365</td>
+        <td class="right">0.387</td>
+      </tr>
+      <tr>
+        <td>Averaged</td>
+        <td class="right">9.67</td>
+        <td class="right">8.38</td>
+        <td class="right">0.325</td>
+        <td class="right">0.359</td>
+      </tr>
+      <tr>
+        <td>Lee</td>
+        <td class="right">51.54</td>
+        <td class="right">69.98</td>
+        <td class="right">0.278</td>
+        <td class="right">0.310</td>
+      </tr>
+      <tr>
+        <td>SAR-BM3D</td>
+        <td class="right">18.02</td>
+        <td class="right">20.54</td>
+        <td class="right">0.318</td>
+        <td class="right">0.348</td>
+      </tr>
+      <tr>
+        <td>Lin. CNN</td>
+        <td class="right">180.70</td>
+        <td class="right">104.61</td>
+        <td class="right bold">0.247</td>
+        <td class="right">0.274</td>
+      </tr>
+      <tr>
+        <td>Log. CNN</td>
+        <td class="right bold">224.58</td>
+        <td class="right bold">120.43</td>
+        <td class="right">0.252</td>
+        <td class="right bold">0.271</td>
+      </tr>
+    </table>
+    <br />
+    <span class="caption">Table 1: Evaluation metrics</span>
+    </p>
+
+    <p>
+    As a final analysis, the processing time of each method was compared. Multitemporal averaging had the shortest processing time, however the proposed CNN was much faster than the other reference methods. These results are shown in <i>Table 2</i>.
+    </p>
+
+    <p class="centered">
+      <table class="left">
+        <tr>
+          <th>Method</th>
+          <th class="right">Seconds per megapixel</th>
+        </tr>
+        <tr>
+          <td>Averaged</td>
+          <td class="right"><b>0.4</b></td>
+        </tr>
+        <tr>
+          <td>Lee</td>
+          <td class="right">66.9</td>
+        </tr>
+        <tr>
+          <td>SAR-BM3D</td>
+          <td class="right">353.5</td>
+        </tr>
+        <tr>
+          <td>CNN (log. and lin.)</td>
+          <td class="right">16.7</td>
+        </tr>
+      </table>
+      <br />
+      <span class="caption">Table 2: Processing time</span>
+    <p>
+
+  </div>
+  </body>
+</html>

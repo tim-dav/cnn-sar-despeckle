@@ -1,0 +1,6 @@
+node_modules
+.ipynb_checkpoints
+*.ipynb
+package-lock.json
+.venv
+__pycache__
